@@ -41,24 +41,38 @@ const navItems = [
   { id: 'forecasts', label: 'Forecasts', icon: TrendingUp },
 ]
 
-function AuthScreen({ onAuth }) {
-  const [mode, setMode] = useState('login')
-  const [form, setForm] = useState({ fullName: '', email: '', password: '', businessName: '' })
+function AuthScreen({ onAuth, resetToken = '' }) {
+  const [mode, setMode] = useState(resetToken ? 'reset' : 'login')
+  const [form, setForm] = useState({ fullName: '', email: '', password: '', confirmPassword: '', businessName: '' })
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
+  const [notice, setNotice] = useState('')
   const [showPassword, setShowPassword] = useState(false)
-  const change = (event) => setForm((previous) => ({ ...previous, [event.target.name]: event.target.value }))
+  const change = (event) => { setNotice(''); setError(''); setForm((previous) => ({ ...previous, [event.target.name]: event.target.value })) }
   const submit = async (event) => {
     event.preventDefault(); setError(''); setBusy(true)
     try {
-      const result = await request(`/api/auth/${mode === 'login' ? 'login' : 'register'}`, null, {
-        method: 'POST', body: JSON.stringify(mode === 'login'
-          ? { email: form.email, password: form.password }
-          : form),
-      })
-      onAuth(result)
+      if (mode === 'forgot') {
+        const result = await request('/api/auth/forgot-password', null, { method: 'POST', body: JSON.stringify({ email: form.email }) })
+        setNotice(result.message)
+      } else if (mode === 'reset') {
+        if (form.password !== form.confirmPassword) throw new Error('The passwords do not match.')
+        const result = await request('/api/auth/reset-password', null, { method: 'POST', body: JSON.stringify({ token: resetToken, newPassword: form.password }) })
+        window.history.replaceState({}, '', window.location.pathname)
+        setMode('login'); setForm((previous) => ({ ...previous, password: '', confirmPassword: '' })); setNotice(result.message)
+      } else {
+        const result = await request(`/api/auth/${mode === 'login' ? 'login' : 'register'}`, null, {
+          method: 'POST', body: JSON.stringify(mode === 'login'
+            ? { email: form.email, password: form.password }
+            : { fullName: form.fullName, email: form.email, password: form.password, businessName: form.businessName }),
+        })
+        onAuth(result)
+      }
     } catch (exception) { setError(exception.message) } finally { setBusy(false) }
   }
+  const switchMode = (nextMode) => { setMode(nextMode); setNotice(''); setError(''); setShowPassword(false) }
+  const authTitle = mode === 'login' ? 'Sign in to StockPilot' : mode === 'register' ? 'Create your workspace' : mode === 'forgot' ? 'Reset your password' : 'Choose a new password'
+  const authHint = mode === 'login' ? 'Your business is right where you left it.' : mode === 'register' ? 'A clearer view of your inventory starts here.' : mode === 'forgot' ? 'We’ll email a secure link if an account matches.' : 'Use at least 8 characters for your new password.'
   return <main className="auth-shell">
     <section className="auth-story">
       <a className="brand brand-light" href="#top"><span className="brand-mark"><Command size={19} /></span>stockpilot<span className="brand-dot">.</span></a>
@@ -72,21 +86,23 @@ function AuthScreen({ onAuth }) {
       <div className="story-orbit orbit-one" /><div className="story-orbit orbit-two" />
     </section>
     <section className="auth-side" id="top">
-      <div className="auth-top"><span>Already tracking your stock?</span><button className="text-button" onClick={() => setMode(mode === 'login' ? 'register' : 'login')}>{mode === 'login' ? 'Create an account' : 'Sign in'} <ArrowRight size={14} /></button></div>
+      <div className="auth-top"><span>{mode === 'login' ? 'Already tracking your stock?' : mode === 'register' ? 'Already have an account?' : 'Remembered your password?'}</span><button className="text-button" onClick={() => switchMode(mode === 'login' ? 'register' : 'login')}>{mode === 'login' ? 'Create an account' : 'Sign in'} <ArrowRight size={14} /></button></div>
       <div className="auth-card">
         <div className="auth-icon"><Building2 size={20} /></div>
-        <p className="eyebrow">{mode === 'login' ? 'WELCOME BACK' : 'LET’S GET YOU STARTED'}</p>
-        <h2>{mode === 'login' ? 'Sign in to StockPilot' : 'Create your workspace'}</h2>
-        <p className="auth-hint">{mode === 'login' ? 'Your business is right where you left it.' : 'A clearer view of your inventory starts here.'}</p>
+        <p className="eyebrow">{mode === 'login' ? 'WELCOME BACK' : mode === 'register' ? 'LET’S GET YOU STARTED' : 'ACCOUNT RECOVERY'}</p>
+        <h2>{authTitle}</h2>
+        <p className="auth-hint">{authHint}</p>
         <form onSubmit={submit} className="auth-form">
           {mode === 'register' && <>
             <label>Your name<input name="fullName" value={form.fullName} onChange={change} placeholder="e.g. Priya Sharma" minLength="2" maxLength="80" required /></label>
             <label>Business name<input name="businessName" value={form.businessName} onChange={change} placeholder="e.g. Green Basket Market" minLength="2" maxLength="120" required /></label>
           </>}
-          <label>Email address<input type="email" name="email" value={form.email} onChange={change} placeholder="you@yourbusiness.com" required /></label>
-          <label>Password<div className="password-wrap"><input type={showPassword ? 'text' : 'password'} name="password" value={form.password} onChange={change} placeholder="At least 8 characters" minLength="8" maxLength="72" required /><button type="button" className="show-password" onClick={() => setShowPassword((value) => !value)}>{showPassword ? 'Hide' : 'Show'}</button></div></label>
+          {mode !== 'reset' && <label>Email address<input type="email" name="email" value={form.email} onChange={change} placeholder="you@yourbusiness.com" required /></label>}
+          {(mode === 'login' || mode === 'register') && <><label>Password<div className="password-wrap"><input type={showPassword ? 'text' : 'password'} name="password" value={form.password} onChange={change} placeholder="At least 8 characters" minLength="8" maxLength="72" required /><button type="button" className="show-password" onClick={() => setShowPassword((value) => !value)}>{showPassword ? 'Hide' : 'Show'}</button></div></label>{mode === 'login' && <div className="auth-form-links"><button type="button" className="text-button" onClick={() => switchMode('forgot')}>Forgot password?</button></div>}</>}
+          {mode === 'reset' && <><label>New password<div className="password-wrap"><input type={showPassword ? 'text' : 'password'} name="password" value={form.password} onChange={change} placeholder="At least 8 characters" minLength="8" maxLength="72" required /><button type="button" className="show-password" onClick={() => setShowPassword((value) => !value)}>{showPassword ? 'Hide' : 'Show'}</button></div></label><label>Confirm new password<input type="password" name="confirmPassword" value={form.confirmPassword} onChange={change} placeholder="Enter the new password again" minLength="8" maxLength="72" required /></label></>}
           {error && <div className="form-error"><CircleHelp size={16} />{error}</div>}
-          <button className="button button-dark auth-submit" disabled={busy}>{busy ? <LoaderCircle className="spin" size={17} /> : mode === 'login' ? 'Sign in' : 'Create account'} <ArrowRight size={16} /></button>
+          {notice && <div className="auth-notice"><ShieldCheck size={16} />{notice}</div>}
+          <button className="button button-dark auth-submit" disabled={busy}>{busy ? <LoaderCircle className="spin" size={17} /> : mode === 'login' ? 'Sign in' : mode === 'register' ? 'Create account' : mode === 'forgot' ? 'Send reset link' : 'Reset password'} <ArrowRight size={16} /></button>
         </form>
         <p className="secure-note"><ShieldCheck size={15} /> Your business data stays private and secure.</p>
       </div>
@@ -96,6 +112,7 @@ function AuthScreen({ onAuth }) {
 }
 
 function App() {
+  const resetToken = new URLSearchParams(window.location.search).get('resetToken') || ''
   const [token, setToken] = useState(() => localStorage.getItem('stockpilot.token'))
   const [profile, setProfile] = useState(() => { try { return JSON.parse(localStorage.getItem('stockpilot.profile')) } catch { return null } })
   const [page, setPage] = useState('overview')
@@ -107,6 +124,7 @@ function App() {
   const [query, setQuery] = useState('')
   const [modal, setModal] = useState('')
   const [mobileNav, setMobileNav] = useState(false)
+  const [profileMenuOpen, setProfileMenuOpen] = useState(false)
   const headerRef = useRef(null)
   const contentRef = useRef(null)
 
@@ -117,7 +135,7 @@ function App() {
   }
   const signOut = () => {
     localStorage.removeItem('stockpilot.token'); localStorage.removeItem('stockpilot.profile')
-    setToken(null); setProfile(null); setProducts([]); setForecasts([]); setPage('overview')
+    setToken(null); setProfile(null); setProducts([]); setForecasts([]); setPage('overview'); setProfileMenuOpen(false)
   }
   const loadData = useCallback(async () => {
     if (!token) return
@@ -139,7 +157,6 @@ function App() {
     if (!token || !headerRef.current) return
     const ctx = gsap.context(() => {
       gsap.fromTo('.animate-in', { y: 18, opacity: 0 }, { y: 0, opacity: 1, duration: 0.65, stagger: 0.07, ease: 'power3.out' })
-      gsap.fromTo('.reveal-line', { scaleX: 0, transformOrigin: 'left' }, { scaleX: 1, duration: 0.8, ease: 'power2.out', scrollTrigger: { trigger: '.reveal-line', start: 'top 90%' } })
     }, contentRef)
     return () => ctx.revert()
   }, [token, page, loading])
@@ -152,6 +169,7 @@ function App() {
   const filteredProducts = useMemo(() => products.filter((product) => `${product.name} ${product.sku} ${product.category || ''}`.toLowerCase().includes(query.toLowerCase())), [products, query])
   const needsAttention = useMemo(() => forecasts.filter((item) => item.lowStockAlert || Number(item.daysOfCover) < Number(item.leadTimeDays)), [forecasts])
 
+  if (resetToken) return <AuthScreen key="password-reset" onAuth={acceptAuth} resetToken={resetToken} />
   if (!token) return <AuthScreen onAuth={acceptAuth} />
 
   const pageTitle = navItems.find((item) => item.id === page)?.label || 'Overview'
@@ -171,7 +189,7 @@ function App() {
       <header className="topbar" ref={headerRef}>
         <button className="icon-button mobile-menu" onClick={() => setMobileNav(true)}><Menu size={21} /></button>
         <div className="breadcrumb"><span>Workspace</span><ChevronRight size={14} /><strong>{pageTitle}</strong></div>
-        <div className="top-actions"><div className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search anything..." /><kbd>⌘ K</kbd></div><button className="icon-button notification-button" title="Notifications"><Bell size={18} /><i /></button><div className="top-avatar">{(profile?.fullName || 'U').slice(0, 1).toUpperCase()}</div></div>
+        <div className="top-actions"><div className="search-box"><Search size={16} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search anything..." /><kbd>⌘ K</kbd></div><button className="icon-button notification-button" title="Notifications"><Bell size={18} /><i /></button><div className="profile-menu-wrap"><button className="top-avatar" aria-label="Open account menu" aria-expanded={profileMenuOpen} onClick={() => setProfileMenuOpen((open) => !open)}>{(profile?.fullName || 'U').slice(0, 1).toUpperCase()}</button>{profileMenuOpen && <div className="profile-dropdown"><div className="profile-dropdown-user"><strong>{profile?.fullName || 'Account'}</strong><span>{profile?.email}</span></div><button onClick={signOut}><LogOut size={15} />Sign out</button></div>}</div></div>
       </header>
       <div className="page-content">
         {error && <div className="error-banner"><CircleHelp size={17} /><span>{error}</span><button className="icon-button" onClick={() => setError('')}><X size={16} /></button></div>}
