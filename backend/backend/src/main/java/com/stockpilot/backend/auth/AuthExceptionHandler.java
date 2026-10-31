@@ -33,7 +33,7 @@ public class AuthExceptionHandler {
 
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<ApiError> dataConflict() {
-        return error(HttpStatus.CONFLICT, "This account could not be created because its email is already in use.");
+        return error(HttpStatus.CONFLICT, "A record with a conflicting unique value already exists.");
     }
 
     private ResponseEntity<ApiError> error(HttpStatus status, String message) {
