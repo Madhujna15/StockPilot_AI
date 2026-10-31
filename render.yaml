@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: stockpilot-backend
+    runtime: docker
+    rootDir: backend/backend
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    envVars:
+      - key: DB_URL
+        sync: false
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: TESSERACT_PATH
+        value: tesseract
+      - key: MAIL_ENABLED
+        value: "false"
